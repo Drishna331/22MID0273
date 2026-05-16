@@ -1,9 +1,38 @@
 const axios = require("axios");
 
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiYXVkIjoiaHR0cDovLzIwLjI0NC41Ni4xNDQvZXZhbHVhdGlvbi1zZXJ2aWNlIiwiZW1haWwiOiJkcmlzaG5hLmIyMDIyQHZpdHN0dWRlbnQuYWMuaW4iLCJleHAiOjE3Nzg5MjY1MTQsImlhdCI6MTc3ODkyNTYxNCwiaXNzIjoiQWZmb3JkIE1lZGljYWwgVGVjaG5vbG9naWVzIFByaXZhdGUgTGltaXRlZCIsImp0aSI6IjQ0ZGM5YjhmLTllYjktNDBlNy04MjBiLTMzNjliZDAwOTkyYSIsImxvY2FsZSI6ImVuLUlOIiwibmFtZSI6ImRyaXNobmEgYiIsInN1YiI6ImJkZjQ3ZDBiLTc3ZDEtNDAzOC05YmU2LTI3OGUwNDNkODkwOCJ9LCJlbWFpbCI6ImRyaXNobmEuYjIwMjJAdml0c3R1ZGVudC5hYy5pbiIsIm5hbWUiOiJkcmlzaG5hIGIiLCJyb2xsTm8iOiIyMm1pZDAyNzMiLCJhY2Nlc3NDb2RlIjoiU2ZGdVdnIiwiY2xpZW50SUQiOiJiZGY0N2QwYi03N2QxLTQwMzgtOWJlNi0yNzhlMDQzZDg5MDgiLCJjbGllbnRTZWNyZXQiOiJ5a2padmdnVFFiU2dOY2JRIn0._9vtTTbI8RI_3fJYHELK7zNnlP09ZrosjdQBq4L_v3c";
+const CLIENT_ID = "bdf47d0b-77d1-4038-9be6-278e043d8908";
+const CLIENT_SECRET = "ykjZvggTQbSgNcbQ";
+const EMAIL = "drishna.b2022@vitstudent.ac.in";
+const NAME = "drishna b";
+const ROLL_NO = "22mid0273";
+const ACCESS_CODE = "SfFuWg";
+
+let token = null;
+
+async function getToken() {
+  try {
+    const res = await axios.post(
+      "http://4.224.186.213/evaluation-service/auth",
+      {
+        email: EMAIL,
+        name: NAME,
+        rollNo: ROLL_NO,
+        accessCode: ACCESS_CODE,
+        clientID: CLIENT_ID,
+        clientSecret: CLIENT_SECRET,
+      }
+    );
+    token = res.data.access_token;
+    return token;
+  } catch (err) {
+    console.error("[Log Failed] Auth failed:", err.message);
+    throw err;
+  }
+}
 
 async function Log(stack, level, package_name, message) {
   try {
+    if (!token) await getToken();
     await axios.post(
       "http://4.224.186.213/evaluation-service/logs",
       {
@@ -14,14 +43,21 @@ async function Log(stack, level, package_name, message) {
       },
       {
         headers: {
-          Authorization: `Bearer ${TOKEN}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       }
     );
     console.log(`[${level.toUpperCase()}] ${package_name}: ${message}`);
   } catch (error) {
-    console.error("Log failed:", error.message);
+    // If token is expired or unauthorized, refresh it and RETRY
+    if (error.response && error.response.status === 401) {
+      await getToken();
+      // CRITICAL FIX: You MUST return this call so it doesn't fall through to the console.error block below!
+      return await Log(stack, level, package_name, message);
+    } else {
+      console.error("Log failed:", error.message);
+    }
   }
 }
 
